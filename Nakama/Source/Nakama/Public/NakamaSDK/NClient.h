@@ -107,6 +107,7 @@ namespace Nakama {
 
 	private:
 		NClient(std::string serverKey);
+		int64_t collationIndex;
 
 		unsigned connectTimeout;
 		std::string host;
@@ -132,6 +133,10 @@ namespace Nakama {
 		std::string GetWebsocketPath(NSession* session);
 
 		void onMessage(Envelope message);
+
+		std::string NextCollationId() {
+			return "" + (++collationIndex);
+		}
 
 	};
 

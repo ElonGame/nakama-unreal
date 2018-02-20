@@ -87,7 +87,7 @@ namespace Nakama {
 	{
 
 		// Add a collation ID for logs
-		payload->set_collationid(TCHAR_TO_UTF8(*FGuid::NewGuid().ToString()));
+		payload->set_collationid(NextCollationId());
 
 		std::string uri;
 		uri.append(ssl ? "https://" : "http://").append(host).append(":").append(std::to_string(port)).append(path);
@@ -98,7 +98,7 @@ namespace Nakama {
 		char* auth = base64((serverKey + ":").c_str(), serverKey.length() + 1, &rLen);
 		std::string authHeader = "Basic " + std::string(auth);
 
-		int64 span = FDateTime::UtcNow().ToUnixTimestamp();
+		std::chrono::milliseconds timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
 		transport->Post(uri, payload, authHeader, langHeader, timeout, connectTimeout,
 			[=](std::vector<uint8_t> data) {
 			AuthenticateResponse authResponse;
@@ -109,7 +109,7 @@ namespace Nakama {
 			switch (authResponse.id_case())
 			{
 			case AuthenticateResponse::IdCase::kSession:
-				if (callback) callback(new NSession(authResponse.session().token().c_str(), std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::seconds(span))));
+				if (callback) callback(new NSession(authResponse.session().token().c_str(), timestamp));
 				break;
 			case AuthenticateResponse::IdCase::kError:
 				if (errback) errback(NError(authResponse.error(), authResponse.collation_id()));
@@ -130,7 +130,7 @@ namespace Nakama {
 		if (serverTime < 1)
 		{
 			// Time has not been set via socket yet.
-			return FDateTime::UtcNow().ToUnixTimestamp();
+			return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 		}
 		return serverTime;
 	}
@@ -188,7 +188,7 @@ namespace Nakama {
 	void NClient::Send(INCollatedMessage& message, std::function<void(void*)> callback, std::function<void(NError)> errback)
 	{
 		// Set a collation ID to dispatch callbacks on receive
-		std::string collationId = TCHAR_TO_UTF8(*FGuid::NewGuid().ToString());
+		std::string collationId = NextCollationId();
 		message.SetCollationId(collationId);
 
 		// Track callbacks for message

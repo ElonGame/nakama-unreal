@@ -106,7 +106,7 @@ namespace Nakama {
 
 		/**  Recv and Send Buffers, serviced during the Tick */
 		std::vector<uint8> ReceivedBuffer;
-		TArray<TArray<uint8>> OutgoingBuffer;
+		std::vector<std::vector<uint8>> OutgoingBuffer;
 
 		/** libwebsocket internal context*/
 		WebSocketInternalContext* Context = nullptr;

@@ -133,12 +133,15 @@ namespace Nakama {
 
 	bool NWebSocket::Send(uint8* Data, uint32 Size)
 	{
-		TArray<uint8> Buffer;
+		std::vector<uint8> Buffer;
 
-		Buffer.AddDefaulted(LWS_PRE); // Reserve space for WS header data
+		// resize to reserve space for WS header data and given data.
+		Buffer.resize(LWS_PRE + Size);
 
-		Buffer.Append((uint8*)Data, Size);
-		OutgoingBuffer.Add(Buffer);
+		// copy across data
+		memcpy(Buffer.data() + LWS_PRE, Data, Size);
+
+		OutgoingBuffer.push_back(Buffer);
 
 		return true;
 	}
@@ -158,8 +161,8 @@ namespace Nakama {
 
 	void NWebSocket::Flush()
 	{
-		auto PendingMesssages = OutgoingBuffer.Num();
-		while (OutgoingBuffer.Num() > 0)
+		auto PendingMesssages = OutgoingBuffer.size();
+		while (!OutgoingBuffer.empty())
 		{
 			if (Protocols)
 			{
@@ -170,7 +173,7 @@ namespace Nakama {
 				lws_callback_on_writable(LwsConnection);
 			}
 			HandlePacket();
-			if (PendingMesssages >= OutgoingBuffer.Num())
+			if (PendingMesssages >= OutgoingBuffer.size())
 			{
 				NLogger::Warn("Unable to flush all of OutgoingBuffer in FWebSocket.");
 				break;
@@ -196,22 +199,17 @@ namespace Nakama {
 
 	void NWebSocket::OnWebSocketWritable()
 	{
-		if (LwsConnection == nullptr)
-		{
-			return;
-		}
+		if (LwsConnection == nullptr) return;
+		if (OutgoingBuffer.empty()) return;
 
-		if (OutgoingBuffer.Num() == 0)
-			return;
+		std::vector<uint8>& Packet = OutgoingBuffer[0];
 
-		TArray <uint8>& Packet = OutgoingBuffer[0];
-
-		uint32 TotalDataSize = Packet.Num() - LWS_PRE;
+		uint32 TotalDataSize = Packet.size() - LWS_PRE;
 		uint32 DataToSend = TotalDataSize;
 		// TODO: We could break this up to send over multiple ticks instead.
 		while (DataToSend)
 		{
-			int Sent = lws_write(LwsConnection, Packet.GetData() + LWS_PRE + (DataToSend - TotalDataSize), DataToSend, (lws_write_protocol)LWS_WRITE_BINARY);
+			int Sent = lws_write(LwsConnection, Packet.data() + LWS_PRE + (DataToSend - TotalDataSize), DataToSend, (lws_write_protocol)LWS_WRITE_BINARY);
 			if (Sent < 0)
 			{
 				if (ErrorCallBack) ErrorCallBack("Fatal error on lws_write.");
@@ -228,9 +226,9 @@ namespace Nakama {
 		}
 
 		// FIXME: replace with more efficient data structure.
-		OutgoingBuffer.RemoveAt(0);
+		OutgoingBuffer.erase(OutgoingBuffer.begin());
 
-		if (OutgoingBuffer.Num() > 0) {
+		if (!OutgoingBuffer.empty()) {
 			lws_callback_on_writable(LwsConnection);
 		}
 	}
@@ -277,7 +275,7 @@ namespace Nakama {
 			NLogger::Trace("WebSocket->Connection Established.");
 			Self->isConnecting = false;
 			Self->LwsConnection = Instance;
-			if (Self->OutgoingBuffer.Num() != 0)
+			if (!Self->OutgoingBuffer.empty())
 			{
 				lws_callback_on_writable(Self->LwsConnection);
 			}
