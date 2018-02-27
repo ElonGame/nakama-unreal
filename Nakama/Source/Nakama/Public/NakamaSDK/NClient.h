@@ -135,7 +135,7 @@ namespace Nakama {
 		void onMessage(Envelope message);
 
 		std::string NextCollationId() {
-			return "" + (++collationIndex);
+			return std::to_string(++collationIndex);
 		}
 
 	};
